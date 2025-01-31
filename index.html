@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete User Info</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        h1 { color: #333; }
+        pre { background: #f4f4f4; padding: 15px; text-align: left; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+        button { padding: 10px; margin: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Complete Browser-Collected User Info</h1>
+    <button onclick="getFullUserData()">Click to Fetch User Info</button>
+    <pre id="userInfo">Click the button to load data...</pre>
+
+    <script>
+        async function getFullUserData() {
+            const browserInfo = {
+                userAgent: navigator.userAgent,
+                browserLanguage: navigator.language,
+                platform: navigator.platform,
+                screenSize: `${window.screen.width}x${window.screen.height}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                referrer: document.referrer || "No referrer detected"
+            };
+
+            // Network Info
+            const networkInfo = navigator.connection ? {
+                downlink: navigator.connection.downlink + " Mbps",
+                effectiveType: navigator.connection.effectiveType,
+                rtt: navigator.connection.rtt + " ms"
+            } : { message: "Network API not supported" };
+
+            // WebRTC Local IP Detection
+            let localIPs = [];
+            if (window.RTCPeerConnection) {
+                const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+                pc.createDataChannel("");
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                pc.onicecandidate = event => {
+                    if (event && event.candidate && event.candidate.candidate) {
+                        const ipMatch = event.candidate.candidate.match(/\d+\.\d+\.\d+\.\d+/);
+                        if (ipMatch) localIPs.push(ipMatch[0]);
+                    }
+                };
+                setTimeout(() => pc.close(), 3000);
+            }
+
+            // Fetch Public IP Address (Optional - Use External API)
+            let publicIP = "Fetching...";
+            try {
+                const ipResponse = await fetch("https://api64.ipify.org?format=json");
+                const ipData = await ipResponse.json();
+                publicIP = ipData.ip;
+            } catch (error) {
+                publicIP = "Error fetching IP";
+            }
+
+            // Media Devices (Camera, Microphone, Speakers)
+            const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+            const mediaInfo = mediaDevices.map(device => ({
+                type: device.kind,
+                label: device.label || "Unknown Device"
+            }));
+
+            // Geolocation (Requires Permission)
+            let locationInfo = { message: "Location permission not granted" };
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        locationInfo = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy + " meters"
+                        };
+                        updateUserInfo();
+                    },
+                    (error) => { locationInfo = { error: error.message }; }
+                );
+            }
+
+            // Battery Status (If Supported)
+            const batteryInfo = navigator.getBattery ? await navigator.getBattery().then(battery => ({
+                level: (battery.level * 100) + "%",
+                charging: battery.charging ? "Yes" : "No"
+            })) : { message: "Battery API not supported" };
+
+            // Touchscreen Detection
+            const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+            // Installed Fonts (Basic Fingerprint Alternative)
+            const fonts = ["Arial", "Courier", "Georgia", "Times New Roman", "Verdana"];
+            const availableFonts = fonts.filter(font => {
+                const span = document.createElement("span");
+                span.style.fontFamily = font;
+                document.body.appendChild(span);
+                const isLoaded = span.offsetWidth !== 0;
+                document.body.removeChild(span);
+                return isLoaded;
+            });
+
+            // WebGL Renderer Info (Detects GPU)
+            let webglInfo = { message: "WebGL not supported" };
+            try {
+                const canvas = document.createElement("canvas");
+                const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+                if (gl) {
+                    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+                    webglInfo = {
+                        vendor: debugInfo ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) : "Unknown",
+                        renderer: debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : "Unknown"
+                    };
+                }
+            } catch (e) {}
+
+            // Browser Extensions Detection (Limited to Chrome-based browsers)
+            let extensionsDetected = [];
+            if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest) {
+                extensionsDetected.push("Some extensions are installed (Chrome API restricted)");
+            } else {
+                extensionsDetected.push("No extensions detected (or not using Chrome)");
+            }
+
+            // Collect All Data
+            const userData = {
+                Browser_Info: browserInfo,
+                Network_Info: networkInfo,
+                Public_IP: publicIP,
+                Local_IPs: localIPs,
+                Media_Devices: mediaInfo,
+                Geolocation: locationInfo,
+                Battery_Info: batteryInfo,
+                Touchscreen: hasTouchScreen ? "Yes" : "No",
+                Installed_Fonts: availableFonts,
+                WebGL_Renderer: webglInfo,
+                Browser_Extensions: extensionsDetected
+            };
+
+            // Display User Data
+            document.getElementById("userInfo").textContent = JSON.stringify(userData, null, 2);
+        }
+    </script>
+</body>
+</html>
